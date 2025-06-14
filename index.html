@@ -125,14 +125,14 @@
         // Importações do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, orderBy, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, orderBy, deleteDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
-        // Sua configuração do Firebase que você forneceu
+        // Sua configuração do Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyD-2HF1KBOPjx-3FwxV_pcD0UauB5asg74",
             authDomain: "passandoplantao.firebaseapp.com",
             projectId: "passandoplantao",
-            storageBucket: "passandoplantao.appspot.com", // Corrigido para .appspot.com
+            storageBucket: "passandoplantao.appspot.com",
             messagingSenderId: "293699114625",
             appId: "1:293699114625:web:fda370ee7b4e1f64e01f80",
             measurementId: "G-DMGVY7J4JV"
@@ -232,6 +232,10 @@
             let q = query(collection(db, "atendimentos", date, "pacientes"), orderBy("order"));
             
             unsubscribePatients = onSnapshot(q, (snapshot) => {
+                // A verificação hasPendingWrites evita que a UI seja recarregada desnecessariamente por alterações locais
+                if (snapshot.metadata.hasPendingWrites) {
+                    return;
+                }
                 const patientsData = [];
                 snapshot.forEach(doc => {
                     patientsData.push({ id: doc.id, ...doc.data() });
@@ -249,10 +253,15 @@
             const turnoFilter = document.getElementById('filter-turno').value;
             const setorFilter = document.getElementById('filter-setor').value;
             
-            patients
-              .filter(p => (turnoFilter === 'todos' || p.turno === turnoFilter))
-              .filter(p => (setorFilter === 'todos' || p.setor === setorFilter))
-              .forEach(patientData => createPatientCard(patientData.id, patientData));
+            const filteredPatients = patients
+              .filter(p => (turnoFilter === 'todos' || !p.turno || p.turno === turnoFilter))
+              .filter(p => (setorFilter === 'todos' || !p.setor || p.setor === setorFilter));
+            
+            if (filteredPatients.length === 0) {
+                 patientContainer.innerHTML = '<p class="text-center text-slate-500 py-8">Nenhum paciente encontrado para os filtros selecionados.</p>';
+            } else {
+                filteredPatients.forEach(patientData => createPatientCard(patientData.id, patientData));
+            }
         }
 
         function createPatientCard(id, data) {
@@ -279,11 +288,10 @@
                 summary.classList.add('active');
                 details.classList.add('open');
             }
-
-            const debouncedUpdate = debounce((dataToUpdate) => updatePatient(id, dataToUpdate), 500);
-
+            
+            // BUG FIX: Listener alterado de 'input' para 'change' para salvar ao perder o foco.
             card.querySelectorAll('input, textarea').forEach(el => {
-                el.addEventListener('input', () => debouncedUpdate({ [el.dataset.field]: el.value }));
+                el.addEventListener('change', () => updatePatient(id, { [el.dataset.field]: el.value }));
             });
 
             card.querySelector('.status-btn').addEventListener('click', () => {
@@ -310,27 +318,27 @@
                 return;
             }
             
-            const newId = doc(collection(db, "atendimentos", date, "pacientes")).id;
+            const newDocRef = doc(collection(db, "atendimentos", date, "pacientes"));
             const newPatientData = {
-                id: newId,
+                id: newDocRef.id,
                 nome: 'Novo Paciente', leito: '', idade: '', diagnostico: '',
                 status: 'pendente',
                 evolucao: 'SINAIS VITAIS:\nPA: mmHg | FC: bpm | SpO₂: %\n\nAVALIAÇÃO:\n\n\nCONDUTA REALIZADA:\n\n\nEVOLUÇÃO/OBSERVAÇÕES:\n',
                 order: patientContainer.children.length,
-                createdAt: new Date(),
+                createdAt: serverTimestamp(),
                 lastUpdatedBy: currentUser.email,
                 isOpen: true,
                 turno: turno === 'todos' ? 'manha' : turno,
                 setor: setor === 'todos' ? '1° Enfermaria' : setor,
             };
 
-            await setDoc(doc(db, "atendimentos", date, "pacientes", newId), newPatientData);
+            await setDoc(newDocRef, newPatientData);
         }
 
         async function updatePatient(id, dataToUpdate) {
             const date = document.getElementById('filter-data').value;
             const docRef = doc(db, "atendimentos", date, "pacientes", id);
-            await setDoc(docRef, { ...dataToUpdate, lastUpdatedBy: currentUser.email }, { merge: true });
+            await setDoc(docRef, { ...dataToUpdate, lastUpdatedBy: currentUser.email, lastUpdatedAt: serverTimestamp() }, { merge: true });
         }
         
         async function deletePatient(id) {
@@ -343,16 +351,7 @@
             card.dataset.status = status;
             const summary = card.querySelector('.patient-summary');
             summary.classList.remove('status-pendente', 'status-atendido');
-            summary.classList.add(`status-${status}`);
-        }
-        
-        function debounce(func, wait) {
-            let timeout;
-            return function(...args) {
-                const context = this;
-                clearTimeout(timeout);
-                timeout = setTimeout(() => func.apply(context, args), wait);
-            };
+            summary.classList.add(`status-${status || 'pendente'}`);
         }
 
         // Inicialização do Sortable
