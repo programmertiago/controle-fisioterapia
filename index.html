@@ -269,15 +269,17 @@
             let q = query(collection(db, "atendimentos", date, "pacientes"), orderBy("order"));
             
             unsubscribePatients = onSnapshot(q, (snapshot) => {
+                const activeEl = document.activeElement;
                 const currentFocus = {
-                    id: document.activeElement?.id,
-                    start: document.activeElement?.selectionStart,
-                    end: document.activeElement?.selectionEnd,
+                    id: activeEl?.id,
+                    start: (typeof activeEl?.selectionStart === 'number' ? activeEl.selectionStart : null),
+                    end: (typeof activeEl?.selectionEnd === 'number' ? activeEl.selectionEnd : null),
                 };
 
-                if (snapshot.metadata.hasPendingWrites && document.activeElement.tagName === 'INPUT') {
+                if (snapshot.metadata.hasPendingWrites && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
                      return;
                 }
+
                 const patientsData = [];
                 snapshot.forEach(doc => {
                     patientsData.push({ id: doc.id, ...doc.data() });
@@ -305,11 +307,13 @@
                 filteredPatients.forEach(patientData => createPatientCard(patientData.id, patientData));
             }
 
-            if (focus.id) {
+            if (focus && focus.id) {
                 const newFocusElement = document.getElementById(focus.id);
                 if (newFocusElement) {
                     newFocusElement.focus();
-                    newFocusElement.setSelectionRange(focus.start, focus.end);
+                    if (typeof newFocusElement.setSelectionRange === 'function' && focus.start !== null && focus.end !== null) {
+                        newFocusElement.setSelectionRange(focus.start, focus.end);
+                    }
                 }
             }
         }
