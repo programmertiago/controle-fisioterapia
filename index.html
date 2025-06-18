@@ -18,7 +18,7 @@
         .drag-handle { cursor: grab; }
         .sortable-ghost { opacity: 0.4; background: #c7d2fe; }
         .sortable-chosen { cursor: grabbing; }
-        #loading-overlay, #auth-overlay { transition: opacity 0.3s ease; }
+        #loading-overlay, #auth-overlay, .modal-overlay { transition: opacity 0.3s ease; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
@@ -29,8 +29,8 @@
             <h2 class="text-2xl font-bold text-slate-800 mb-2">Controle de Fisioterapia</h2>
             <p class="text-slate-600 mb-6">Por favor, identifique-se para continuar.</p>
             <div class="space-y-4">
-                <input type="email" id="email-input" placeholder="Seu e-mail" class="w-full p-3 border border-slate-300 rounded-lg text-center">
-                <input type="password" id="password-input" placeholder="Sua senha" class="w-full p-3 border border-slate-300 rounded-lg text-center">
+                <input type="email" id="email-input" autocomplete="off" placeholder="Seu e-mail" class="w-full p-3 border border-slate-300 rounded-lg text-center">
+                <input type="password" id="password-input" autocomplete="off" placeholder="Sua senha" class="w-full p-3 border border-slate-300 rounded-lg text-center">
             </div>
             <div class="mt-6 space-y-3">
                  <button id="login-btn" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all">Entrar</button>
@@ -43,7 +43,7 @@
     <!-- Tela de Carregamento -->
     <div id="loading-overlay" class="fixed inset-0 bg-white flex flex-col items-center justify-center z-40 hidden">
          <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-         <p class="mt-4 text-slate-600">Carregando dados...</p>
+         <p id="loading-text" class="mt-4 text-slate-600">Carregando dados...</p>
     </div>
 
     <!-- Conteúdo Principal da Aplicação -->
@@ -92,6 +92,9 @@
         <main id="patient-container" class="space-y-4"></main>
         
         <div class="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+            <button id="copy-day-btn" class="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-indigo-700">
+                Copiar Dia Anterior
+            </button>
             <button id="add-patient-btn" class="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-blue-700">
                 Adicionar Paciente
             </button>
@@ -102,13 +105,17 @@
     <div id="patient-template" class="patient-card hidden">
         <div class="patient-summary p-4 cursor-pointer">
             <div class="grid grid-cols-12 gap-x-4 gap-y-2 items-center">
-                <div class="col-drag md:col-span-1 flex items-center text-slate-400 drag-handle"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg></div>
-                <div class="col-status md:col-span-1 flex items-center"><button class="status-btn p-2 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></button></div>
-                <div class="col-nome md:col-span-3"><input type="text" data-field="nome" placeholder="Nome do Paciente" class="w-full font-bold text-lg p-1 rounded-md bg-transparent focus:bg-slate-100"></div>
-                <div class="col-leito md:col-span-1"><label class="font-semibold text-slate-500 text-xs">Leito:</label><input type="text" data-field="leito" placeholder="Ex: 201-A" class="w-full p-1 rounded-md bg-transparent focus:bg-slate-100"></div>
-                <div class="col-idade md:col-span-1"><label class="font-semibold text-slate-500 text-xs">Idade:</label><input type="number" data-field="idade" placeholder="Anos" class="w-full p-1 rounded-md bg-transparent focus:bg-slate-100"></div>
-                <div class="col-diagnostico md:col-span-4"><label class="font-semibold text-slate-500 text-xs">Diagnóstico:</label><input type="text" data-field="diagnostico" placeholder="Diagnóstico clínico" class="w-full p-1 rounded-md bg-transparent focus:bg-slate-100"></div>
-                <div class="col-remover md:col-span-1 flex justify-end"><button class="remove-btn p-2 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-100"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
+                <div class="md:col-span-1 flex items-center text-slate-400 drag-handle"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" /></svg></div>
+                <div class="md:col-span-1 flex items-center"><button class="status-btn p-2 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></button></div>
+                <div class="md:col-span-3"><input type="text" data-field="nome" placeholder="Nome do Paciente" class="w-full font-bold text-lg p-1 rounded-md bg-transparent focus:bg-slate-100"></div>
+                <div class="md:col-span-1"><label class="font-semibold text-slate-500 text-xs">Leito:</label><input type="text" data-field="leito" placeholder="Ex: 201-A" class="w-full p-1 rounded-md bg-transparent focus:bg-slate-100"></div>
+                <div class="md:col-span-1"><label class="font-semibold text-slate-500 text-xs">Idade:</label><input type="number" data-field="idade" placeholder="Anos" class="w-full p-1 rounded-md bg-transparent focus:bg-slate-100"></div>
+                <div class="md:col-span-3"><label class="font-semibold text-slate-500 text-xs">Diagnóstico:</label><input type="text" data-field="diagnostico" placeholder="Diagnóstico clínico" class="w-full p-1 rounded-md bg-transparent focus:bg-slate-100"></div>
+                <div class="md:col-span-2 flex justify-end items-center space-x-1">
+                    <button class="view-btn p-2 rounded-full text-slate-400 hover:text-green-500 hover:bg-green-100"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg></button>
+                    <button class="transfer-btn p-2 rounded-full text-slate-400 hover:text-blue-500 hover:bg-blue-100"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg></button>
+                    <button class="remove-btn p-2 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-100"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                </div>
             </div>
         </div>
         <div class="details-content px-4">
@@ -120,12 +127,33 @@
         </div>
     </div>
     
+    <!-- Modal de Transferência -->
+    <div id="transfer-modal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-bold text-slate-800">Transferir Paciente</h3>
+            <p id="transfer-patient-name" class="text-slate-600 my-2"></p>
+            <div class="mt-4">
+                <label for="transfer-setor-select" class="block text-sm font-medium text-slate-700 mb-1">Transferir para o setor:</label>
+                <select id="transfer-setor-select" class="w-full p-2 border border-slate-300 rounded-lg">
+                    <option>1° Enfermaria</option>
+                    <option>2° Enfermaria</option>
+                    <option>3° Enfermaria</option>
+                    <option>UTI</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-4 mt-6">
+                <button id="cancel-transfer-btn" class="py-2 px-6 bg-slate-200 rounded-lg font-semibold hover:bg-slate-300">Cancelar</button>
+                <button id="confirm-transfer-btn" class="py-2 px-6 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Módulos do Firebase -->
     <script type="module">
         // Importações do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, orderBy, deleteDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, orderBy, deleteDoc, writeBatch, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
         // Sua configuração do Firebase
         const firebaseConfig = {
@@ -148,8 +176,12 @@
 
         const authOverlay = document.getElementById('auth-overlay');
         const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
         const appContainer = document.getElementById('app-container');
         const patientContainer = document.getElementById('patient-container');
+        const emailInput = document.getElementById('email-input');
+        const passwordInput = document.getElementById('password-input');
+        const transferModal = document.getElementById('transfer-modal');
 
         // --- Lógica de Autenticação ---
         onAuthStateChanged(auth, user => {
@@ -169,8 +201,8 @@
         });
 
         document.getElementById('login-btn').addEventListener('click', () => {
-            const email = document.getElementById('email-input').value;
-            const password = document.getElementById('password-input').value;
+            const email = emailInput.value;
+            const password = passwordInput.value;
             document.getElementById('auth-error').textContent = '';
             signInWithEmailAndPassword(auth, email, password)
                 .catch(error => {
@@ -179,8 +211,8 @@
         });
         
         document.getElementById('register-btn').addEventListener('click', () => {
-            const email = document.getElementById('email-input').value;
-            const password = document.getElementById('password-input').value;
+            const email = emailInput.value;
+            const password = passwordInput.value;
             document.getElementById('auth-error').textContent = '';
             if (email.length < 6 || password.length < 6) {
                 document.getElementById('auth-error').textContent = "E-mail e senha devem ter no mínimo 6 caracteres.";
@@ -195,7 +227,11 @@
                 });
         });
 
-        document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            signOut(auth);
+            emailInput.value = '';
+            passwordInput.value = '';
+        });
 
 
         // --- Lógica do Aplicativo ---
@@ -214,17 +250,18 @@
             });
             
             document.getElementById('add-patient-btn').onclick = addPatient;
+            document.getElementById('copy-day-btn').onclick = copyFromPreviousDay;
         }
 
         function loadPatients() {
-            loadingOverlay.classList.remove('hidden');
+            setLoading(true, "Carregando pacientes...");
             if (unsubscribePatients) {
                 unsubscribePatients();
             }
             
             const date = document.getElementById('filter-data').value;
             if (!date) {
-                loadingOverlay.classList.add('hidden');
+                setLoading(false);
                 patientContainer.innerHTML = '<p class="text-center text-slate-500">Selecione uma data para ver os pacientes.</p>';
                 return;
             }
@@ -232,23 +269,28 @@
             let q = query(collection(db, "atendimentos", date, "pacientes"), orderBy("order"));
             
             unsubscribePatients = onSnapshot(q, (snapshot) => {
-                // A verificação hasPendingWrites evita que a UI seja recarregada desnecessariamente por alterações locais
-                if (snapshot.metadata.hasPendingWrites) {
-                    return;
+                const currentFocus = {
+                    id: document.activeElement?.id,
+                    start: document.activeElement?.selectionStart,
+                    end: document.activeElement?.selectionEnd,
+                };
+
+                if (snapshot.metadata.hasPendingWrites && document.activeElement.tagName === 'INPUT') {
+                     return;
                 }
                 const patientsData = [];
                 snapshot.forEach(doc => {
                     patientsData.push({ id: doc.id, ...doc.data() });
                 });
-                renderPatients(patientsData);
-                loadingOverlay.classList.add('hidden');
+                renderPatients(patientsData, currentFocus);
+                setLoading(false);
             }, (error) => {
                 console.error("Erro ao carregar pacientes: ", error);
-                loadingOverlay.classList.add('hidden');
+                setLoading(false);
             });
         }
         
-        function renderPatients(patients) {
+        function renderPatients(patients, focus) {
             patientContainer.innerHTML = '';
             const turnoFilter = document.getElementById('filter-turno').value;
             const setorFilter = document.getElementById('filter-setor').value;
@@ -262,6 +304,14 @@
             } else {
                 filteredPatients.forEach(patientData => createPatientCard(patientData.id, patientData));
             }
+
+            if (focus.id) {
+                const newFocusElement = document.getElementById(focus.id);
+                if (newFocusElement) {
+                    newFocusElement.focus();
+                    newFocusElement.setSelectionRange(focus.start, focus.end);
+                }
+            }
         }
 
         function createPatientCard(id, data) {
@@ -273,11 +323,10 @@
             const summary = card.querySelector('.patient-summary');
             const details = card.querySelector('.details-content');
 
-            card.querySelector('[data-field="nome"]').value = data.nome || '';
-            card.querySelector('[data-field="leito"]').value = data.leito || '';
-            card.querySelector('[data-field="idade"]').value = data.idade || '';
-            card.querySelector('[data-field="diagnostico"]').value = data.diagnostico || '';
-            card.querySelector('[data-field="evolucao"]').value = data.evolucao || '';
+            card.querySelectorAll('[data-field]').forEach(el => {
+                 el.value = data[el.dataset.field] || '';
+                 el.id = `field-${id}-${el.dataset.field}`;
+            });
             
             if (data.lastUpdatedBy) {
                 card.querySelector('.last-updated-by').textContent = `Atualizado por: ${data.lastUpdatedBy.split('@')[0]}`;
@@ -288,8 +337,13 @@
                 summary.classList.add('active');
                 details.classList.add('open');
             }
-            
-            // BUG FIX: Listener alterado de 'input' para 'change' para salvar ao perder o foco.
+
+            const toggleDetails = () => {
+                details.classList.toggle('open');
+                summary.classList.toggle('active');
+                updatePatient(id, { isOpen: details.classList.contains('open') });
+            };
+
             card.querySelectorAll('input, textarea').forEach(el => {
                 el.addEventListener('change', () => updatePatient(id, { [el.dataset.field]: el.value }));
             });
@@ -299,10 +353,11 @@
                 updatePatient(id, { status: newStatus });
             });
             card.querySelector('.remove-btn').addEventListener('click', () => deletePatient(id));
+            card.querySelector('.transfer-btn').addEventListener('click', () => showTransferModal(id, data.nome));
+            card.querySelector('.view-btn').addEventListener('click', toggleDetails);
             summary.addEventListener('click', (e) => {
                  if (e.target.closest('input, button, .drag-handle')) return;
-                 details.classList.toggle('open');
-                 updatePatient(id, { isOpen: details.classList.contains('open') });
+                 toggleDetails();
             });
 
             patientContainer.appendChild(card);
@@ -335,6 +390,64 @@
             await setDoc(newDocRef, newPatientData);
         }
 
+        async function copyFromPreviousDay() {
+            const currentDateStr = document.getElementById('filter-data').value;
+            if(!currentDateStr) {
+                alert("Por favor, selecione uma data primeiro.");
+                return;
+            }
+
+            const currentDate = new Date(currentDateStr + 'T12:00:00Z');
+            const previousDate = new Date(currentDate);
+            previousDate.setDate(currentDate.getDate() - 1);
+            const previousDateStr = previousDate.toISOString().split('T')[0];
+
+            if(!confirm(`Deseja copiar os pacientes de ${previousDateStr} para a lista de hoje? Eles serão adicionados aos pacientes já existentes.`)) {
+                return;
+            }
+            
+            setLoading(true, `Copiando pacientes de ${previousDateStr}...`);
+
+            try {
+                const prevDayQuery = query(collection(db, "atendimentos", previousDateStr, "pacientes"));
+                const querySnapshot = await getDocs(prevDayQuery);
+
+                if (querySnapshot.empty) {
+                    alert(`Nenhum paciente encontrado no dia ${previousDateStr}.`);
+                    setLoading(false);
+                    return;
+                }
+
+                const batch = writeBatch(db);
+                const currentPatientsCount = patientContainer.children.length;
+                let copiedCount = 0;
+
+                querySnapshot.forEach((docSnap, index) => {
+                    const oldData = docSnap.data();
+                    const newDocRef = doc(collection(db, "atendimentos", currentDateStr, "pacientes"));
+                    
+                    const newPatientData = {
+                        nome: oldData.nome, leito: oldData.leito, idade: oldData.idade, diagnostico: oldData.diagnostico,
+                        setor: oldData.setor, turno: oldData.turno, status: 'pendente',
+                        evolucao: 'SINAIS VITAIS:\nPA: mmHg | FC: bpm | SpO₂: %\n\nAVALIAÇÃO:\n\n\nCONDUTA REALIZADA:\n\n\nEVOLUÇÃO/OBSERVAÇÕES:\n',
+                        order: currentPatientsCount + index, createdAt: serverTimestamp(),
+                        lastUpdatedBy: currentUser.email, isOpen: false
+                    };
+                    batch.set(newDocRef, newPatientData);
+                    copiedCount++;
+                });
+
+                await batch.commit();
+                alert(`${copiedCount} paciente(s) copiado(s) com sucesso!`);
+
+            } catch (error) {
+                console.error("Erro ao copiar pacientes: ", error);
+                alert("Ocorreu um erro ao tentar copiar os pacientes. Verifique o console para mais detalhes.");
+            } finally {
+                setLoading(false);
+            }
+        }
+
         async function updatePatient(id, dataToUpdate) {
             const date = document.getElementById('filter-data').value;
             const docRef = doc(db, "atendimentos", date, "pacientes", id);
@@ -353,8 +466,37 @@
             summary.classList.remove('status-pendente', 'status-atendido');
             summary.classList.add(`status-${status || 'pendente'}`);
         }
+        
+        function setLoading(isLoading, text = "Carregando...") {
+            loadingText.textContent = text;
+            loadingOverlay.classList.toggle('hidden', !isLoading);
+        }
+        
+        // --- Lógica do Modal de Transferência ---
+        function showTransferModal(patientId, patientName) {
+            transferModal.dataset.patientId = patientId;
+            document.getElementById('transfer-patient-name').textContent = `Paciente: ${patientName}`;
+            transferModal.classList.remove('hidden');
+        }
 
-        // Inicialização do Sortable
+        function hideTransferModal() {
+            transferModal.classList.add('hidden');
+            delete transferModal.dataset.patientId;
+        }
+
+        async function confirmTransfer() {
+            const patientId = transferModal.dataset.patientId;
+            const newSector = document.getElementById('transfer-setor-select').value;
+            if (patientId && newSector) {
+                await updatePatient(patientId, { setor: newSector });
+                hideTransferModal();
+            }
+        }
+        
+        document.getElementById('confirm-transfer-btn').addEventListener('click', confirmTransfer);
+        document.getElementById('cancel-transfer-btn').addEventListener('click', hideTransferModal);
+
+        // --- Inicialização do Sortable ---
         new Sortable(patientContainer, {
             animation: 150,
             handle: '.drag-handle',
