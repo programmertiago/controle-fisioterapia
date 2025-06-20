@@ -151,12 +151,10 @@
 
     <!-- Módulos do Firebase -->
     <script type="module">
-        // Importações do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, query, orderBy, deleteDoc, writeBatch, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
-        // Sua configuração do Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyD-2HF1KBOPjx-3FwxV_pcD0UauB5asg74",
             authDomain: "passandoplantao.firebaseapp.com",
@@ -167,12 +165,12 @@
             measurementId: "G-DMGVY7J4JV"
         };
 
-        // Inicialização dos serviços
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
         let unsubscribePatients = null;
+        let currentDayPatients = new Map();
 
         const authOverlay = document.getElementById('auth-overlay');
         const loadingOverlay = document.getElementById('loading-overlay');
@@ -184,7 +182,6 @@
         const transferModal = document.getElementById('transfer-modal');
         const authError = document.getElementById('auth-error');
 
-        // --- Lógica de Autenticação ---
         onAuthStateChanged(auth, user => {
             if (user) {
                 authOverlay.classList.add('hidden');
@@ -244,15 +241,17 @@
             });
         });
 
-        // --- Lógica do Aplicativo ---
-        
         function setupFilters() {
             const dateFilter = document.getElementById('filter-data');
             const turnoFilter = document.getElementById('filter-turno');
             const setorFilter = document.getElementById('filter-setor');
             dateFilter.value = new Date().toISOString().split('T')[0];
+            
+            dateFilter.addEventListener('change', loadPatients);
+            [turnoFilter, setorFilter].forEach(el => el.addEventListener('change', applyFiltersAndRender));
+            
             loadPatients();
-            [dateFilter, turnoFilter, setorFilter].forEach(el => el.addEventListener('change', loadPatients));
+            
             document.getElementById('add-patient-btn').onclick = addPatient;
             document.getElementById('copy-day-btn').onclick = copyFromPreviousDay;
         }
@@ -261,8 +260,8 @@
             setLoading(true, "A carregar pacientes...");
             if (unsubscribePatients) unsubscribePatients();
             
-            // BUGFIX: Limpa o container ao mudar de data/filtro para evitar mostrar pacientes de dias anteriores.
             patientContainer.innerHTML = '';
+            currentDayPatients.clear();
 
             const date = document.getElementById('filter-data').value;
             if (!date) {
@@ -274,20 +273,19 @@
             const q = query(collection(db, "atendimentos", date, "pacientes"), orderBy("order"));
             
             unsubscribePatients = onSnapshot(q, (snapshot) => {
-                // BUGFIX: A nova lógica de renderização seletiva previne a perda de foco.
                 snapshot.docChanges().forEach((change) => {
-                    const docData = change.doc.data();
+                    const docData = { id: change.doc.id, ...change.doc.data() };
                     const docId = change.doc.id;
                     
                     if (change.type === "added") {
-                        if (!document.getElementById(docId)) { 
-                            createPatientCard(docId, docData);
-                        }
+                        currentDayPatients.set(docId, docData);
                     }
                     if (change.type === "modified") {
+                        currentDayPatients.set(docId, docData);
                         updateCardInPlace(docId, docData);
                     }
                     if (change.type === "removed") {
+                        currentDayPatients.delete(docId);
                         const cardToRemove = document.getElementById(docId);
                         if (cardToRemove) cardToRemove.remove();
                     }
@@ -303,30 +301,23 @@
         function applyFiltersAndRender() {
             const turnoFilter = document.getElementById('filter-turno').value;
             const setorFilter = document.getElementById('filter-setor').value;
-            let visibleCount = 0;
+            
+            const sortedPatients = Array.from(currentDayPatients.values()).sort((a, b) => a.order - b.order);
 
-            document.querySelectorAll('.patient-card').forEach(card => {
-                const cardTurno = card.dataset.turno;
-                const cardSetor = card.dataset.setor;
+            patientContainer.innerHTML = ''; // Limpa antes de redesenhar
 
-                const turnoMatch = turnoFilter === 'todos' || cardTurno === turnoFilter;
-                const setorMatch = setorFilter === 'todos' || cardSetor === setorFilter;
-
-                if(turnoMatch && setorMatch) {
-                    card.classList.remove('hidden');
-                    visibleCount++;
-                } else {
-                    card.classList.add('hidden');
-                }
-            });
-
-            const noResultsMsg = document.getElementById('no-results-msg');
-            if (visibleCount === 0 && patientContainer.querySelectorAll('.patient-card').length > 0) {
-                 if (!noResultsMsg) {
-                    patientContainer.insertAdjacentHTML('beforeend', '<p id="no-results-msg" class="text-center text-slate-500 py-8">Nenhum paciente encontrado para os filtros selecionados.</p>');
-                 }
+            const filteredPatients = sortedPatients
+              .filter(p => (turnoFilter === 'todos' || !p.turno || p.turno === turnoFilter))
+              .filter(p => (setorFilter === 'todos' || !p.setor || p.setor === setorFilter));
+            
+            if (filteredPatients.length === 0) {
+                 patientContainer.innerHTML = '<p class="text-center text-slate-500 py-8">Nenhum paciente encontrado para os filtros selecionados.</p>';
             } else {
-                if (noResultsMsg) noResultsMsg.remove();
+                filteredPatients.forEach(patientData => {
+                    if (!document.getElementById(patientData.id)) {
+                        createPatientCard(patientData.id, patientData);
+                    }
+                });
             }
         }
 
@@ -357,11 +348,11 @@
             }
         }
 
-
         function createPatientCard(id, data) {
             const template = document.getElementById('patient-template');
             const card = template.cloneNode(true);
             card.id = id;
+            card.classList.remove('hidden');
             card.dataset.setor = data.setor;
             card.dataset.turno = data.turno;
 
@@ -415,17 +406,14 @@
             const turno = document.getElementById('filter-turno').value;
             const setor = document.getElementById('filter-setor').value;
             
-            if (!date) {
-                alert("Por favor, selecione uma data para adicionar pacientes.");
-                return;
-            }
+            if (!date) return alert("Por favor, selecione uma data para adicionar pacientes.");
             
             const newDocRef = doc(collection(db, "atendimentos", date, "pacientes"));
             const newPatientData = {
                 nome: 'Novo Paciente', leito: '', idade: '', diagnostico: '',
                 status: 'pendente',
                 evolucao: 'SINAIS VITAIS:\nPA: mmHg | FC: bpm | SpO₂: %\n\nAVALIAÇÃO:\n\n\nCONDUTA REALIZADA:\n\n\nEVOLUÇÃO/OBSERVAÇÕES:\n',
-                order: patientContainer.children.length,
+                order: Array.from(currentDayPatients.values()).length,
                 createdAt: serverTimestamp(),
                 lastUpdatedBy: auth.currentUser.email,
                 isOpen: true,
@@ -438,19 +426,14 @@
 
         async function copyFromPreviousDay() {
             const currentDateStr = document.getElementById('filter-data').value;
-            if(!currentDateStr) {
-                alert("Por favor, selecione uma data primeiro.");
-                return;
-            }
+            if(!currentDateStr) return alert("Por favor, selecione uma data primeiro.");
 
             const currentDate = new Date(currentDateStr + 'T12:00:00Z');
             const previousDate = new Date(currentDate);
             previousDate.setDate(currentDate.getDate() - 1);
             const previousDateStr = previousDate.toISOString().split('T')[0];
 
-            if(!confirm(`Deseja copiar os pacientes de ${previousDateStr} para a lista de hoje? Eles serão adicionados aos pacientes já existentes.`)) {
-                return;
-            }
+            if(!confirm(`Deseja copiar os pacientes de ${previousDateStr} para a lista de hoje? Eles serão adicionados aos pacientes já existentes.`)) return;
             
             setLoading(true, `A copiar pacientes de ${previousDateStr}...`);
 
@@ -460,12 +443,11 @@
 
                 if (querySnapshot.empty) {
                     alert(`Nenhum paciente encontrado no dia ${previousDateStr}.`);
-                    setLoading(false);
                     return;
                 }
 
                 const batch = writeBatch(db);
-                const currentPatientsCount = patientContainer.children.length;
+                const currentPatientsCount = Array.from(currentDayPatients.values()).length;
                 let copiedCount = 0;
 
                 querySnapshot.forEach((docSnap, index) => {
@@ -557,12 +539,12 @@
             onEnd: async (evt) => {
                 const date = document.getElementById('filter-data').value;
                 const batch = writeBatch(db);
-                const items = evt.from.children;
-                for (let i = 0; i < items.length; i++) {
-                    const docId = items[i].id;
-                    const docRef = doc(db, "atendimentos", date, "pacientes", docId);
-                    batch.update(docRef, { order: i });
-                }
+                Array.from(evt.from.children).forEach((item, index) => {
+                    if (item.id) {
+                         const docRef = doc(db, "atendimentos", date, "pacientes", item.id);
+                         batch.update(docRef, { order: index });
+                    }
+                });
                 await batch.commit();
             }
         });
