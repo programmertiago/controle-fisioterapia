@@ -36,7 +36,8 @@
                  <button id="login-btn" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all">Entrar</button>
                  <button id="register-btn" class="w-full py-2 text-blue-600 font-medium rounded-lg hover:bg-blue-50 transition-all">Não tenho conta, quero me registrar</button>
             </div>
-            <p id="auth-error" class="text-red-500 text-sm mt-4 h-4"></p>
+            <button id="forgot-password-btn" class="text-sm text-slate-500 hover:underline mt-4">Esqueceu a senha?</button>
+            <p id="auth-error" class="text-red-500 text-sm mt-2 h-4"></p>
         </div>
     </div>
     
@@ -152,8 +153,8 @@
     <script type="module">
         // Importações do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, orderBy, deleteDoc, writeBatch, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query, orderBy, deleteDoc, writeBatch, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
         // Sua configuração do Firebase
         const firebaseConfig = {
@@ -171,7 +172,6 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        let currentUser = null;
         let unsubscribePatients = null;
 
         const authOverlay = document.getElementById('auth-overlay');
@@ -182,57 +182,67 @@
         const emailInput = document.getElementById('email-input');
         const passwordInput = document.getElementById('password-input');
         const transferModal = document.getElementById('transfer-modal');
+        const authError = document.getElementById('auth-error');
 
         // --- Lógica de Autenticação ---
         onAuthStateChanged(auth, user => {
             if (user) {
-                currentUser = user;
                 authOverlay.classList.add('hidden');
                 appContainer.classList.remove('hidden');
                 document.getElementById('user-display').textContent = `Bem-vindo(a), ${user.email.split('@')[0]}`;
                 setupFilters();
             } else {
-                currentUser = null;
                 authOverlay.classList.remove('hidden');
                 loadingOverlay.classList.add('hidden');
                 appContainer.classList.add('hidden');
-                if(unsubscribePatients) unsubscribePatients();
+                if (unsubscribePatients) unsubscribePatients();
             }
         });
 
         document.getElementById('login-btn').addEventListener('click', () => {
             const email = emailInput.value;
             const password = passwordInput.value;
-            document.getElementById('auth-error').textContent = '';
-            signInWithEmailAndPassword(auth, email, password)
-                .catch(error => {
-                    document.getElementById('auth-error').textContent = "E-mail ou senha incorretos.";
-                });
+            authError.textContent = '';
+            signInWithEmailAndPassword(auth, email, password).catch(error => {
+                authError.textContent = "E-mail ou senha incorretos.";
+            });
         });
         
         document.getElementById('register-btn').addEventListener('click', () => {
             const email = emailInput.value;
             const password = passwordInput.value;
-            document.getElementById('auth-error').textContent = '';
+            authError.textContent = '';
             if (email.length < 6 || password.length < 6) {
-                document.getElementById('auth-error').textContent = "E-mail e senha devem ter no mínimo 6 caracteres.";
+                authError.textContent = "E-mail e senha devem ter no mínimo 6 caracteres.";
                 return;
             }
-            createUserWithEmailAndPassword(auth, email, password)
-                .then(() => {
-                     document.getElementById('auth-error').textContent = "Registro bem-sucedido! Faça o login.";
-                })
-                .catch(error => {
-                    document.getElementById('auth-error').textContent = "Erro ao registrar. O e-mail já pode existir.";
-                });
+            createUserWithEmailAndPassword(auth, email, password).then(() => {
+                authError.textContent = "Registo bem-sucedido! Faça o login.";
+            }).catch(error => {
+                authError.textContent = "Erro ao registar. O e-mail já pode existir.";
+            });
+        });
+        
+        document.getElementById('forgot-password-btn').addEventListener('click', () => {
+            const email = emailInput.value;
+            authError.textContent = '';
+            if (!email) {
+                authError.textContent = "Por favor, digite o seu e-mail para recuperar a senha.";
+                return;
+            }
+            sendPasswordResetEmail(auth, email).then(() => {
+                authError.textContent = "E-mail de recuperação de senha enviado!";
+            }).catch((error) => {
+                authError.textContent = "Erro ao enviar e-mail. Verifique se o e-mail está correto.";
+            });
         });
 
         document.getElementById('logout-btn').addEventListener('click', () => {
-            signOut(auth);
-            emailInput.value = '';
-            passwordInput.value = '';
+            signOut(auth).then(() => {
+                emailInput.value = '';
+                passwordInput.value = '';
+            });
         });
-
 
         // --- Lógica do Aplicativo ---
         
@@ -240,25 +250,20 @@
             const dateFilter = document.getElementById('filter-data');
             const turnoFilter = document.getElementById('filter-turno');
             const setorFilter = document.getElementById('filter-setor');
-
             dateFilter.value = new Date().toISOString().split('T')[0];
-            
             loadPatients();
-
-            [dateFilter, turnoFilter, setorFilter].forEach(el => {
-                el.addEventListener('change', loadPatients);
-            });
-            
+            [dateFilter, turnoFilter, setorFilter].forEach(el => el.addEventListener('change', loadPatients));
             document.getElementById('add-patient-btn').onclick = addPatient;
             document.getElementById('copy-day-btn').onclick = copyFromPreviousDay;
         }
 
         function loadPatients() {
-            setLoading(true, "Carregando pacientes...");
-            if (unsubscribePatients) {
-                unsubscribePatients();
-            }
+            setLoading(true, "A carregar pacientes...");
+            if (unsubscribePatients) unsubscribePatients();
             
+            // BUGFIX: Limpa o container ao mudar de data/filtro para evitar mostrar pacientes de dias anteriores.
+            patientContainer.innerHTML = '';
+
             const date = document.getElementById('filter-data').value;
             if (!date) {
                 setLoading(false);
@@ -266,25 +271,28 @@
                 return;
             }
             
-            let q = query(collection(db, "atendimentos", date, "pacientes"), orderBy("order"));
+            const q = query(collection(db, "atendimentos", date, "pacientes"), orderBy("order"));
             
             unsubscribePatients = onSnapshot(q, (snapshot) => {
-                const activeEl = document.activeElement;
-                const currentFocus = {
-                    id: activeEl?.id,
-                    start: (typeof activeEl?.selectionStart === 'number' ? activeEl.selectionStart : null),
-                    end: (typeof activeEl?.selectionEnd === 'number' ? activeEl.selectionEnd : null),
-                };
-
-                if (snapshot.metadata.hasPendingWrites && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
-                     return;
-                }
-
-                const patientsData = [];
-                snapshot.forEach(doc => {
-                    patientsData.push({ id: doc.id, ...doc.data() });
+                // BUGFIX: A nova lógica de renderização seletiva previne a perda de foco.
+                snapshot.docChanges().forEach((change) => {
+                    const docData = change.doc.data();
+                    const docId = change.doc.id;
+                    
+                    if (change.type === "added") {
+                        if (!document.getElementById(docId)) { 
+                            createPatientCard(docId, docData);
+                        }
+                    }
+                    if (change.type === "modified") {
+                        updateCardInPlace(docId, docData);
+                    }
+                    if (change.type === "removed") {
+                        const cardToRemove = document.getElementById(docId);
+                        if (cardToRemove) cardToRemove.remove();
+                    }
                 });
-                renderPatients(patientsData, currentFocus);
+                applyFiltersAndRender();
                 setLoading(false);
             }, (error) => {
                 console.error("Erro ao carregar pacientes: ", error);
@@ -292,37 +300,70 @@
             });
         }
         
-        function renderPatients(patients, focus) {
-            patientContainer.innerHTML = '';
+        function applyFiltersAndRender() {
             const turnoFilter = document.getElementById('filter-turno').value;
             const setorFilter = document.getElementById('filter-setor').value;
-            
-            const filteredPatients = patients
-              .filter(p => (turnoFilter === 'todos' || !p.turno || p.turno === turnoFilter))
-              .filter(p => (setorFilter === 'todos' || !p.setor || p.setor === setorFilter));
-            
-            if (filteredPatients.length === 0) {
-                 patientContainer.innerHTML = '<p class="text-center text-slate-500 py-8">Nenhum paciente encontrado para os filtros selecionados.</p>';
-            } else {
-                filteredPatients.forEach(patientData => createPatientCard(patientData.id, patientData));
-            }
+            let visibleCount = 0;
 
-            if (focus && focus.id) {
-                const newFocusElement = document.getElementById(focus.id);
-                if (newFocusElement) {
-                    newFocusElement.focus();
-                    if (typeof newFocusElement.setSelectionRange === 'function' && focus.start !== null && focus.end !== null) {
-                        newFocusElement.setSelectionRange(focus.start, focus.end);
-                    }
+            document.querySelectorAll('.patient-card').forEach(card => {
+                const cardTurno = card.dataset.turno;
+                const cardSetor = card.dataset.setor;
+
+                const turnoMatch = turnoFilter === 'todos' || cardTurno === turnoFilter;
+                const setorMatch = setorFilter === 'todos' || cardSetor === setorFilter;
+
+                if(turnoMatch && setorMatch) {
+                    card.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    card.classList.add('hidden');
                 }
+            });
+
+            const noResultsMsg = document.getElementById('no-results-msg');
+            if (visibleCount === 0 && patientContainer.querySelectorAll('.patient-card').length > 0) {
+                 if (!noResultsMsg) {
+                    patientContainer.insertAdjacentHTML('beforeend', '<p id="no-results-msg" class="text-center text-slate-500 py-8">Nenhum paciente encontrado para os filtros selecionados.</p>');
+                 }
+            } else {
+                if (noResultsMsg) noResultsMsg.remove();
             }
         }
+
+        function updateCardInPlace(id, data) {
+            const card = document.getElementById(id);
+            if (!card) return;
+
+            card.dataset.setor = data.setor;
+            card.dataset.turno = data.turno;
+
+            card.querySelectorAll('[data-field]').forEach(el => {
+                if (document.activeElement !== el && el.value !== data[el.dataset.field]) {
+                    el.value = data[el.dataset.field] || '';
+                }
+            });
+
+            if (data.lastUpdatedBy) {
+                card.querySelector('.last-updated-by').textContent = `Atualizado por: ${data.lastUpdatedBy.split('@')[0]}`;
+            }
+
+            updateStatus(card, data.status);
+            
+            const details = card.querySelector('.details-content');
+            const summary = card.querySelector('.patient-summary');
+            if (data.isOpen !== details.classList.contains('open')) {
+                details.classList.toggle('open');
+                summary.classList.toggle('active');
+            }
+        }
+
 
         function createPatientCard(id, data) {
             const template = document.getElementById('patient-template');
             const card = template.cloneNode(true);
             card.id = id;
-            card.classList.remove('hidden');
+            card.dataset.setor = data.setor;
+            card.dataset.turno = data.turno;
 
             const summary = card.querySelector('.patient-summary');
             const details = card.querySelector('.details-content');
@@ -348,8 +389,10 @@
                 updatePatient(id, { isOpen: details.classList.contains('open') });
             };
 
+            const debouncedUpdate = debounce((dataToUpdate) => updatePatient(id, dataToUpdate), 400);
+
             card.querySelectorAll('input, textarea').forEach(el => {
-                el.addEventListener('change', () => updatePatient(id, { [el.dataset.field]: el.value }));
+                el.addEventListener('input', () => debouncedUpdate({ [el.dataset.field]: el.value }));
             });
 
             card.querySelector('.status-btn').addEventListener('click', () => {
@@ -379,13 +422,12 @@
             
             const newDocRef = doc(collection(db, "atendimentos", date, "pacientes"));
             const newPatientData = {
-                id: newDocRef.id,
                 nome: 'Novo Paciente', leito: '', idade: '', diagnostico: '',
                 status: 'pendente',
                 evolucao: 'SINAIS VITAIS:\nPA: mmHg | FC: bpm | SpO₂: %\n\nAVALIAÇÃO:\n\n\nCONDUTA REALIZADA:\n\n\nEVOLUÇÃO/OBSERVAÇÕES:\n',
                 order: patientContainer.children.length,
                 createdAt: serverTimestamp(),
-                lastUpdatedBy: currentUser.email,
+                lastUpdatedBy: auth.currentUser.email,
                 isOpen: true,
                 turno: turno === 'todos' ? 'manha' : turno,
                 setor: setor === 'todos' ? '1° Enfermaria' : setor,
@@ -410,7 +452,7 @@
                 return;
             }
             
-            setLoading(true, `Copiando pacientes de ${previousDateStr}...`);
+            setLoading(true, `A copiar pacientes de ${previousDateStr}...`);
 
             try {
                 const prevDayQuery = query(collection(db, "atendimentos", previousDateStr, "pacientes"));
@@ -435,7 +477,7 @@
                         setor: oldData.setor, turno: oldData.turno, status: 'pendente',
                         evolucao: 'SINAIS VITAIS:\nPA: mmHg | FC: bpm | SpO₂: %\n\nAVALIAÇÃO:\n\n\nCONDUTA REALIZADA:\n\n\nEVOLUÇÃO/OBSERVAÇÕES:\n',
                         order: currentPatientsCount + index, createdAt: serverTimestamp(),
-                        lastUpdatedBy: currentUser.email, isOpen: false
+                        lastUpdatedBy: auth.currentUser.email, isOpen: false
                     };
                     batch.set(newDocRef, newPatientData);
                     copiedCount++;
@@ -446,7 +488,7 @@
 
             } catch (error) {
                 console.error("Erro ao copiar pacientes: ", error);
-                alert("Ocorreu um erro ao tentar copiar os pacientes. Verifique o console para mais detalhes.");
+                alert("Ocorreu um erro ao tentar copiar os pacientes. Verifique a consola para mais detalhes.");
             } finally {
                 setLoading(false);
             }
@@ -455,11 +497,11 @@
         async function updatePatient(id, dataToUpdate) {
             const date = document.getElementById('filter-data').value;
             const docRef = doc(db, "atendimentos", date, "pacientes", id);
-            await setDoc(docRef, { ...dataToUpdate, lastUpdatedBy: currentUser.email, lastUpdatedAt: serverTimestamp() }, { merge: true });
+            await setDoc(docRef, { ...dataToUpdate, lastUpdatedBy: auth.currentUser.email, lastUpdatedAt: serverTimestamp() }, { merge: true });
         }
         
         async function deletePatient(id) {
-            if (!confirm("Tem certeza que deseja remover este paciente?")) return;
+            if (!confirm("Tem a certeza que deseja remover este paciente?")) return;
             const date = document.getElementById('filter-data').value;
             await deleteDoc(doc(db, "atendimentos", date, "pacientes", id));
         }
@@ -471,12 +513,20 @@
             summary.classList.add(`status-${status || 'pendente'}`);
         }
         
-        function setLoading(isLoading, text = "Carregando...") {
+        function setLoading(isLoading, text = "A carregar...") {
             loadingText.textContent = text;
             loadingOverlay.classList.toggle('hidden', !isLoading);
         }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), wait);
+            };
+        }
         
-        // --- Lógica do Modal de Transferência ---
         function showTransferModal(patientId, patientName) {
             transferModal.dataset.patientId = patientId;
             document.getElementById('transfer-patient-name').textContent = `Paciente: ${patientName}`;
@@ -500,7 +550,6 @@
         document.getElementById('confirm-transfer-btn').addEventListener('click', confirmTransfer);
         document.getElementById('cancel-transfer-btn').addEventListener('click', hideTransferModal);
 
-        // --- Inicialização do Sortable ---
         new Sortable(patientContainer, {
             animation: 150,
             handle: '.drag-handle',
